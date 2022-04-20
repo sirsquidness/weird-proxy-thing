@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,8 +25,19 @@ func runServer(port int) {
 	client := &http.Client{}
 	client.Transport = transport
 
-	// default behaviour if nil is to follow up to 10 redirects
-	client.CheckRedirect = nil
+	// if this CheckRedirect is nil, it will follow up to 10 redirects...
+	// but we'd like to log to know that we saved the day, so we override the func
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) == 0 {
+			// dunno if via can ever be len()==0, but safety first right?
+			return nil
+		}
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		fmt.Printf("Saving the day for a 302 from: %s\n", via[0].URL.String())
+		return nil
+	}
 
 	proxyRequest := func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -67,6 +79,7 @@ func runServer(port int) {
 			fmt.Println("got error while responding: ", err)
 			return
 		}
+		fmt.Println("Handled ", r.URL.String())
 	}
 
 	server := &http.Server{
