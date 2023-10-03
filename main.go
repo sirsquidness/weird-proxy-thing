@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+        "net"
+        "context"
 )
 
 func main() {
@@ -13,10 +15,37 @@ func main() {
 	runServer(1234)
 }
 
+
 func runServer(port int) {
 	// TODO: split your code up mate
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
+
+        //TODO: split up code even more mate
+        var (
+          dnsResolverIP        = "1.1.1.1:53" // Google DNS resolver.
+          dnsResolverProto     = "udp"        // Protocol to use for the DNS resolver
+          dnsResolverTimeoutMs = 5000         // Timeout (ms) for the DNS resolver (optional)
+        )
+
+        dialer := &net.Dialer{
+          Resolver: &net.Resolver{
+            PreferGo: true,
+            Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+              d := net.Dialer{
+                Timeout: time.Duration(dnsResolverTimeoutMs) * time.Millisecond,
+              }
+              return d.DialContext(ctx, dnsResolverProto, dnsResolverIP)
+            },
+          },
+        }
+
+        dialContext := func(ctx context.Context, network, addr string) (net.Conn, error) {
+          return dialer.DialContext(ctx, network, addr)
+        }
+
+        transport.DialContext = dialContext
+
 	transport.MaxConnsPerHost = 20 // is this hostname or IP? Dunno, yolo
 	transport.IdleConnTimeout = time.Minute
 	transport.MaxIdleConns = 20
